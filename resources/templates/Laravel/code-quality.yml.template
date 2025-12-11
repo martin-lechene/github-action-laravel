@@ -1,0 +1,76 @@
+name: {{ workflow_name }}
+on:
+  push:
+    branches: [{{ branches }}]
+  pull_request:
+    branches: [{{ branches }}]
+
+jobs:
+  code-quality:
+    runs-on: {{ runner_os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: {{ php_versions }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: {{ extensions }}
+          tools: composer:v2
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            vendor
+            ~/.composer/cache
+          key: ${{ runner.os }}-php-${{ matrix.php-version }}-composer-${{ hashFiles('**/composer.lock') }}
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction
+
+      {{#if phpstan}}
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --error-format=github
+        continue-on-error: {{ phpstan_continue_on_error }}
+      {{/if}}
+
+      {{#if phpcs}}
+      - name: Run PHP Code Sniffer
+        run: vendor/bin/phpcs --standard=PSR12
+        continue-on-error: {{ phpcs_continue_on_error }}
+      {{/if}}
+
+      {{#if phpcbf}}
+      - name: Run PHPCbf (Auto-fix)
+        run: vendor/bin/phpcbf --standard=PSR12
+        continue-on-error: true
+      {{/if}}
+
+      {{#if phpinsights}}
+      - name: Run PHP Insights
+        run: vendor/bin/phpinsights
+        continue-on-error: {{ phpinsights_continue_on_error }}
+      {{/if}}
+
+      {{#if comment_pr}}
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('phpstan-report.txt', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## Code Quality Report\n\n' + report
+            });
+      {{/if}}
+

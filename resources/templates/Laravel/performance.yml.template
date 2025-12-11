@@ -1,0 +1,63 @@
+name: {{ workflow_name }}
+on:
+  push:
+    branches: [{{ branches }}]
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  performance:
+    runs-on: {{ runner_os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: {{ php_version }}
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction
+
+      {{#if lighthouse}}
+      - name: Lighthouse Audit
+        uses: treosh/lighthouse-ci-action@v9
+        with:
+          urls: |
+            {{ lighthouse_urls }}
+          uploadArtifacts: true
+      {{/if}}
+
+      {{#if load_testing}}
+      - name: Load Testing
+        run: |
+          # Add your load testing tool here
+          echo "Running load tests"
+      {{/if}}
+
+      {{#if performance_benchmarks}}
+      - name: Performance Benchmarks
+        run: |
+          php artisan benchmark:run
+      {{/if}}
+
+      {{#if database_analysis}}
+      - name: Database Query Analysis
+        run: |
+          php artisan db:analyze
+      {{/if}}
+
+      {{#if memory_profiling}}
+      - name: Memory Profiling
+        run: |
+          php artisan profile:memory
+      {{/if}}
+
+      - name: Performance Report
+        if: always()
+        run: |
+          echo "## Performance Report" >> $GITHUB_STEP_SUMMARY
+          echo "- Performance tests completed" >> $GITHUB_STEP_SUMMARY
+

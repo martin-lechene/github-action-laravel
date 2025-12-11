@@ -1,0 +1,75 @@
+name: {{ workflow_name }}
+on:
+  push:
+    branches: [{{ branches }}]
+  pull_request:
+    branches: [{{ branches }}]
+  schedule:
+    - cron: '0 0 * * 1'
+
+jobs:
+  security:
+    runs-on: {{ runner_os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: {{ php_version }}
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction
+
+      {{#if composer_audit}}
+      - name: Composer Audit
+        run: composer audit --format=json > composer-audit.json
+        continue-on-error: true
+
+      - name: Upload Composer Audit
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: composer-audit
+          path: composer-audit.json
+      {{/if}}
+
+      {{#if security_checker}}
+      - name: PHP Security Checker
+        uses: symfonycorp/security-checker-action@v4
+        continue-on-error: true
+      {{/if}}
+
+      {{#if dependabot}}
+      - name: Setup Dependabot
+        run: |
+          echo "Dependabot configuration should be in .github/dependabot.yml"
+      {{/if}}
+
+      {{#if sast}}
+      - name: Run SAST
+        uses: github/super-linter@v4
+        env:
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_ALL_CODEBASE: false
+      {{/if}}
+
+      {{#if secret_scanning}}
+      - name: Secret Scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+      {{/if}}
+
+      - name: Security Report
+        if: always()
+        run: |
+          echo "## Security Scan Report" >> $GITHUB_STEP_SUMMARY
+          echo "- Composer audit completed" >> $GITHUB_STEP_SUMMARY
+          echo "- Security checks completed" >> $GITHUB_STEP_SUMMARY
+

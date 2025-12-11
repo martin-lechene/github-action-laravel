@@ -1,0 +1,63 @@
+name: {{ workflow_name }}
+on:
+  push:
+    branches: [{{ branches }}]
+  workflow_dispatch:
+
+jobs:
+  docs:
+    runs-on: {{ runner_os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: {{ php_version }}
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction
+
+      {{#if generate_api_docs}}
+      - name: Generate API docs
+        run: |
+          php artisan api:generate
+          # or use other documentation tools
+      {{/if}}
+
+      {{#if generate_test_reports}}
+      - name: Generate test reports
+        run: php artisan test --coverage
+      {{/if}}
+
+      {{#if deploy_github_pages}}
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+      {{/if}}
+
+      {{#if create_release}}
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            Documentation updated
+          draft: false
+          prerelease: false
+      {{/if}}
+
+      {{#if changelog}}
+      - name: Generate Changelog
+        run: |
+          echo "## Changelog" > CHANGELOG.md
+          git log --oneline >> CHANGELOG.md
+      {{/if}}
+

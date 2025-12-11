@@ -1,0 +1,77 @@
+name: {{ workflow_name }}
+on:
+  push:
+    branches: [{{ branches }}]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: {{ runner_os }}
+    environment: {{ environment }}
+    needs: [test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: {{ php_version }}
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+
+      {{#if build_artifact}}
+      - name: Build artifact
+        run: |
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+      {{/if}}
+
+      {{#if ssh_deploy}}
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd {{ deploy_path }}
+            git pull origin {{ branch }}
+            composer install --no-dev --optimize-autoloader
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+      {{/if}}
+
+      {{#if run_migrations}}
+      - name: Run migrations
+        run: php artisan migrate --force
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      {{/if}}
+
+      {{#if cache_warm}}
+      - name: Cache warm
+        run: |
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+      {{/if}}
+
+      {{#if health_check}}
+      - name: Health check
+        run: |
+          curl -f {{ health_check_url }} || exit 1
+      {{/if}}
+
+      {{#if rollback}}
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Rollback script here"
+      {{/if}}
+

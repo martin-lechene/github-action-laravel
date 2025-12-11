@@ -1,0 +1,121 @@
+name: {{ workflow_name }}
+on:
+  push:
+    branches: [{{ branches }}]
+  pull_request:
+    branches: [{{ branches }}]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: {{ runner_os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: {{ php_versions }}
+        {{#if database_matrix}}
+        database: {{ databases }}
+        {{/if}}
+    
+    {{#if services}}
+    services:
+      {{#each services}}
+      {{ name }}:
+        image: {{ image }}
+        env:
+          {{#each env}}
+          {{ @key }}: {{ this }}
+          {{/each}}
+        options: {{ options }}
+        ports:
+          - {{ port }}
+      {{/each}}
+    {{/if}}
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      {{#if enable_cache}}
+      - uses: actions/cache@v3
+        with:
+          path: |
+            vendor
+            ~/.composer/cache
+          key: ${{ runner.os }}-php-${{ matrix.php-version }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-${{ matrix.php-version }}-composer-
+      {{/if}}
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: {{ extensions }}
+          tools: composer:v2
+          coverage: {{ coverage_driver }}
+      
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+      
+      {{#if copy_env}}
+      - name: Copy .env.example
+        run: cp .env.example .env
+      {{/if}}
+      
+      {{#if generate_key}}
+      - name: Generate application key
+        run: php artisan key:generate
+      {{/if}}
+      
+      {{#if run_migrations}}
+      - name: Run migrations
+        run: php artisan migrate --force
+        env:
+          DATABASE_URL: {{ db_connection_string }}
+      {{/if}}
+      
+      {{#if seed_database}}
+      - name: Seed database
+        run: php artisan db:seed
+      {{/if}}
+      
+      - name: Run tests
+        run: {{ test_command }}
+        env:
+          {{#each test_env}}
+          {{ @key }}: {{ this }}
+          {{/each}}
+      
+      {{#if upload_coverage}}
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/cobertura.xml
+          flags: php-${{ matrix.php-version }}
+          fail_ci_if_error: false
+      {{/if}}
+      
+      {{#if slack_notification}}
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "Test failed on ${{ github.ref }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Test Pipeline Failed* ❌\nPHP ${{ matrix.php-version }}\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+      {{/if}}
+
