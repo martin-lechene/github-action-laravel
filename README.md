@@ -5,7 +5,7 @@ Package Laravel complet pour générer automatiquement des workflows GitHub Acti
 ## Installation
 
 ```bash
-composer require martin-lechene/laravel-github-actions-gen
+composer require martin-lechene/github-actions-laravel
 ```
 
 ## Configuration
