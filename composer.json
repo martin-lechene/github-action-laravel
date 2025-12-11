@@ -1,0 +1,49 @@
+{
+    "name": "martin-lechene/laravel-github-actions-gen",
+    "description": "Package Laravel pour générer automatiquement des workflows GitHub Actions",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Martin Lechene",
+            "email": "martin@lechene.be"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10.0|^11.0",
+        "illuminate/console": "^10.0|^11.0",
+        "illuminate/filesystem": "^10.0|^11.0",
+        "symfony/yaml": "^6.0",
+        "symfony/process": "^6.0",
+        "symfony/console": "^6.0",
+        "zordius/lightncandy": "^1.2"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "orchestra/testbench": "^8.0|^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "MartinLechene\\GitHubActions\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "MartinLechene\\GitHubActions\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "MartinLechene\\GitHubActions\\GitHubActionsServiceProvider"
+            ],
+            "aliases": {
+                "Workflow": "MartinLechene\\GitHubActions\\Facades\\WorkflowFacade"
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
+
